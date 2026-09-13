@@ -1,14 +1,93 @@
 "use client";
-import { useState } from "react";
-import "./globals.css";
 
-type Finding={severity:string;title:string;detail:string;evidence?:string};
-type Result={target:string;finalUrl:string;status:number;findings:Finding[];checks:string[];durationMs:number};
-export default function Home(){
- const [url,setUrl]=useState(""); const [ok,setOk]=useState(false); const [loading,setLoading]=useState(false); const [error,setError]=useState(""); const [result,setResult]=useState<Result|null>(null);
- async function scan(){setError("");setResult(null);if(!ok){setError("Confirm that you own the target or have permission to scan it.");return}setLoading(true);try{const r=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Scan failed");setResult(d)}catch(e){setError(e instanceof Error?e.message:"Scan failed")}finally{setLoading(false)}}
- return <main className="shell"><section className="hero"><div className="badge">XSSONPY • WEB SECURITY</div><h1>Find security issues.<br/><span>Safely.</span></h1><p>Enter a website you are authorized to test. XSSonPy performs non-destructive checks and gives you evidence to investigate.</p><div className="scanner"><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://example.com" onKeyDown={e=>e.key==="Enter"&&scan()}/><button onClick={scan} disabled={loading||!url.trim()}>{loading?"Scanning…":"Start scan"}</button></div><label className="consent"><input type="checkbox" checked={ok} onChange={e=>setOk(e.target.checked)}/> I own this target or have explicit authorization to test it.</label>{error&&<div className="error">{error}</div>}</section>
- {loading&&<section className="card progress"><div className="spinner"/><div><strong>Analyzing target…</strong><p>Checking headers, redirects, cookies, forms, scripts and common exposure signals.</p></div></section>}
- {result&&<section className="results"><div className="summary card"><div><small>TARGET</small><strong>{result.target}</strong><span>{result.status} • {result.finalUrl}</span></div><div className="score">{result.findings.length}<small>findings</small></div></div><div className="grid"><div className="card"><h2>Findings</h2>{result.findings.length===0?<div className="clean">✓ No issues detected by the passive checks.</div>:result.findings.map((f,i)=><article className="finding" key={i}><div className={'severity '+f.severity.toLowerCase()}>{f.severity}</div><div><h3>{f.title}</h3><p>{f.detail}</p>{f.evidence&&<code>{f.evidence}</code>}</div></article>)}</div><div className="card"><h2>Checks performed</h2><ul>{result.checks.map((c,i)=><li key={i}>✓ {c}</li>)}</ul><p className="muted">Completed in {result.durationMs} ms.</p></div></div></section>}
- <footer>Authorized testing only • XSSonPy v1.0</footer></main>;
+import { useMemo, useState } from "react";
+
+type Source = { url: string; count: number; error?: string };
+type Result = { proxies: string[]; count: number; sources: Source[]; durationMs: number };
+
+const SOURCES = [
+  "api.proxyscrape.com",
+  "TheSpeedX / PROXY-List",
+  "mmpx12 / proxy-list",
+  "monosans / proxy-list",
+  "clarketm / proxy-list",
+];
+
+export default function Home() {
+  const [result, setResult] = useState<Result | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+
+  async function scrape() {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/scrape", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Scrape failed");
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Scrape failed");
+    } finally { setLoading(false); }
+  }
+
+  const filtered = useMemo(() => {
+    if (!result) return [];
+    const q = query.trim();
+    return q ? result.proxies.filter((p) => p.includes(q)) : result.proxies;
+  }, [result, query]);
+
+  function download() {
+    if (!result) return;
+    const blob = new Blob([result.proxies.join("\n") + "\n"], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "scraped.txt"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return <>
+    <div className="bg"/><div className="noise"/>
+    <main className="shell">
+      <header className="top">
+        <div className="brand"><div className="mark"/><div><strong>Orvix</strong><span>proxy suite</span></div></div>
+        <div className="status">● PUBLIC SOURCES</div>
+      </header>
+
+      <section className="hero">
+        <div className="eyebrow">proxy scraper / v1</div>
+        <h1>Collect clean lists.<br/><em>Export instantly.</em></h1>
+        <p>Aggregate public proxy lists, remove duplicates and invalid entries, then export the cleaned pool as <b>scraped.txt</b>.</p>
+      </section>
+
+      <section className="card toolbar">
+        <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter proxies by IP or port…"/>
+        <button className="btn primary" onClick={scrape} disabled={loading}>{loading ? "Scraping…" : "Scrape sources"}</button>
+        <button className="btn" onClick={download} disabled={!result?.count}>Export scraped.txt</button>
+      </section>
+
+      {error && <div className="card" style={{padding:14,marginTop:12,color:"#ff8da0"}}>{error}</div>}
+
+      <section className="stats">
+        <div className="card stat"><small>unique proxies</small><strong>{result?.count ?? "—"}</strong></div>
+        <div className="card stat"><small>visible</small><strong>{result ? filtered.length : "—"}</strong></div>
+        <div className="card stat"><small>duration</small><strong>{result ? `${result.durationMs}ms` : "—"}</strong></div>
+      </section>
+
+      <section className="content">
+        <div className="card panel">
+          <h2>SCRAPED PROXIES</h2>
+          <div className="proxybox">{result ? (filtered.length ? filtered.join("\n") : "No proxies match your filter.") : "Run a scrape to populate the list."}</div>
+          <div className="note">Only public proxy-list sources are aggregated. The browser export contains one <code>IP:PORT</code> entry per line.</div>
+        </div>
+        <aside className="card panel">
+          <h2>SOURCES</h2>
+          {SOURCES.map((name) => <div className="source" key={name}><span>{name}</span><b className={result ? "ok" : ""}>{result ? "loaded" : "ready"}</b></div>)}
+          {result && <div className="note">Duplicates are removed server-side and malformed IPv4/port entries are discarded.</div>}
+        </aside>
+      </section>
+
+      <div className="footer">ORVIX · PUBLIC PROXY LIST AGGREGATOR · AUTHORIZED / RESPONSIBLE USE</div>
+    </main>
+  </>;
 }

@@ -1,18 +1,22 @@
-# XSSonPy
+# Orvix
 
-A Vercel-ready, non-destructive web security scanner for targets you own or are authorized to test.
+Dark-themed public proxy list scraper and exporter.
 
-## What it checks
-- HTTPS and redirect behavior
-- Security response headers (CSP, nosniff, Referrer-Policy, Permissions-Policy)
-- Cookie security attributes
-- Response content type
-- Basic development/debug disclosure signals
+## Features
+- Aggregates five public proxy-list sources
+- Deduplicates and validates IPv4:port entries
+- Live source status and scrape duration
+- Client-side filtering
+- Exports the current cleaned list as `scraped.txt`
+- Next.js app suitable for Vercel
 
-The API deliberately avoids exploit payloads, destructive requests, authentication bypasses, brute force, and arbitrary internal-network access. It also blocks local/private/reserved hosts to reduce SSRF risk.
+The visual direction uses the dark, animated-background approach of React Bits as inspiration; see https://reactbits.dev/ for the component library and background gallery.
 
-## Deploy
-Import this repository into Vercel. The included Next.js app builds without additional services.
+## Run
 
-## Important
-Only scan systems for which you have explicit authorization. Missing security headers are findings to investigate, not proof of an exploitable vulnerability.
+```bash
+npm install
+npm run dev
+```
+
+This project only aggregates publicly published proxy lists. Use exported proxies responsibly and only where you have authorization.
