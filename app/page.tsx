@@ -1,93 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Particles from "../components/Particles";
 
-type Source = { url: string; count: number; error?: string };
-type Result = { proxies: string[]; count: number; sources: Source[]; durationMs: number };
+type ProxyItem={value:string;protocol:string};
+type Source={url:string;count:number;error?:string};
+type Result={proxies:ProxyItem[];count:number;sources:Source[];durationMs:number};
 
-const SOURCES = [
-  "api.proxyscrape.com",
-  "TheSpeedX / PROXY-List",
-  "mmpx12 / proxy-list",
-  "monosans / proxy-list",
-  "clarketm / proxy-list",
-];
+const TYPES=["all","http","https","socks4","socks5"];
 
-export default function Home() {
-  const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-
-  async function scrape() {
-    setLoading(true); setError("");
-    try {
-      const response = await fetch("/api/scrape", { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Scrape failed");
-      setResult(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Scrape failed");
-    } finally { setLoading(false); }
-  }
-
-  const filtered = useMemo(() => {
-    if (!result) return [];
-    const q = query.trim();
-    return q ? result.proxies.filter((p) => p.includes(q)) : result.proxies;
-  }, [result, query]);
-
-  function download() {
-    if (!result) return;
-    const blob = new Blob([result.proxies.join("\n") + "\n"], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "scraped.txt"; a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return <>
-    <div className="bg"/><div className="noise"/>
-    <main className="shell">
-      <header className="top">
-        <div className="brand"><div className="mark"/><div><strong>Orvix</strong><span>proxy suite</span></div></div>
-        <div className="status">● PUBLIC SOURCES</div>
-      </header>
-
-      <section className="hero">
-        <div className="eyebrow">proxy scraper / v1</div>
-        <h1>Collect clean lists.<br/><em>Export instantly.</em></h1>
-        <p>Aggregate public proxy lists, remove duplicates and invalid entries, then export the cleaned pool as <b>scraped.txt</b>.</p>
-      </section>
-
-      <section className="card toolbar">
-        <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter proxies by IP or port…"/>
-        <button className="btn primary" onClick={scrape} disabled={loading}>{loading ? "Scraping…" : "Scrape sources"}</button>
-        <button className="btn" onClick={download} disabled={!result?.count}>Export scraped.txt</button>
-      </section>
-
-      {error && <div className="card" style={{padding:14,marginTop:12,color:"#ff8da0"}}>{error}</div>}
-
-      <section className="stats">
-        <div className="card stat"><small>unique proxies</small><strong>{result?.count ?? "—"}</strong></div>
-        <div className="card stat"><small>visible</small><strong>{result ? filtered.length : "—"}</strong></div>
-        <div className="card stat"><small>duration</small><strong>{result ? `${result.durationMs}ms` : "—"}</strong></div>
-      </section>
-
-      <section className="content">
-        <div className="card panel">
-          <h2>SCRAPED PROXIES</h2>
-          <div className="proxybox">{result ? (filtered.length ? filtered.join("\n") : "No proxies match your filter.") : "Run a scrape to populate the list."}</div>
-          <div className="note">Only public proxy-list sources are aggregated. The browser export contains one <code>IP:PORT</code> entry per line.</div>
-        </div>
-        <aside className="card panel">
-          <h2>SOURCES</h2>
-          {SOURCES.map((name) => <div className="source" key={name}><span>{name}</span><b className={result ? "ok" : ""}>{result ? "loaded" : "ready"}</b></div>)}
-          {result && <div className="note">Duplicates are removed server-side and malformed IPv4/port entries are discarded.</div>}
-        </aside>
-      </section>
-
-      <div className="footer">ORVIX · PUBLIC PROXY LIST AGGREGATOR · AUTHORIZED / RESPONSIBLE USE</div>
-    </main>
-  </>;
+export default function Home(){
+ const [result,setResult]=useState<Result|null>(null);const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[query,setQuery]=useState("");const[type,setType]=useState("all");
+ async function scrape(){setLoading(true);setError("");try{const r=await fetch("/api/scrape",{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Scrape failed");setResult(d)}catch(e){setError(e instanceof Error?e.message:"Scrape failed")}finally{setLoading(false)}}
+ const filtered=useMemo(()=>{if(!result)return[];const q=query.trim().toLowerCase();return result.proxies.filter(p=>(type==="all"||p.protocol===type)&&(!q||p.value.toLowerCase().includes(q)))},[result,query,type]);
+ function download(){if(!filtered.length)return;const text=filtered.map(p=>`${p.protocol}://${p.value}`).join("\n")+"\n";const blob=new Blob([text],{type:"text/plain"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="scraped.txt";a.click();URL.revokeObjectURL(u)}
+ return <><div className="stage"><Particles particleColors={["#ffffff"]} particleCount={180} particleSpread={18} speed={0.12} particleBaseSize={110} moveParticlesOnHover={true} alphaParticles={true} /></div><main className="shell">
+  <header className="top"><div className="brand"><div className="mark"/><div><strong>Orvix</strong><span>proxy suite</span></div></div><div className="status">● LIVE SOURCES</div></header>
+  <section className="hero"><div className="eyebrow">proxy scraper / verified pool</div><h1>Clean proxies.<br/><em>Nothing else.</em></h1><p>Pull verified public HTTP, HTTPS, SOCKS4 and SOCKS5 lists, normalize them, remove duplicates and export the current pool.</p></section>
+  <section className="card toolbar"><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Filter IP or port…"/><select className="btn" value={type} onChange={e=>setType(e.target.value)}>{TYPES.map(t=><option key={t} value={t}>{t.toUpperCase()}</option>)}</select><button className="btn primary" onClick={scrape} disabled={loading}>{loading?"Scraping…":"Scrape verified lists"}</button><button className="btn" onClick={download} disabled={!filtered.length}>Export scraped.txt</button></section>
+  {error&&<div className="card" style={{padding:14,marginTop:10,color:"#ff7185"}}>{error}</div>}
+  <section className="stats"><div className="card stat"><small>verified pool</small><strong>{result?.count??"—"}</strong></div><div className="card stat"><small>visible</small><strong>{result?filtered.length:"—"}</strong></div><div className="card stat"><small>duration</small><strong>{result?`${result.durationMs}ms`:"—"}</strong></div></section>
+  <section className="content"><div className="card panel"><h2>PROXY POOL</h2><div className="proxybox">{result?(filtered.length?filtered.map(p=>`${p.protocol.padEnd(7)} ${p.value}`).join("\n"):"No verified proxies match your filter."):"Run a scrape to populate the verified pool."}</div><div className="note">Export includes protocol + IP:PORT. Sources used below publish or re-check working public proxies. No credentials are sent through scraped proxies.</div></div>
+  <aside className="card panel"><h2>VERIFIED SOURCES</h2>{result?.sources.map(s=><div className="source" key={s.url}><span>{new URL(s.url).hostname}</span><b className={s.error?"":"ok"}>{s.error?"failed":`${s.count}`}</b></div>)}{!result&&<div className="note">HTTP · HTTPS · SOCKS4 · SOCKS5<br/>Multiple independent public pools.</div>} {result&&<div className="note">Counts are the entries accepted from each source after IP:port validation and deduplication.</div>}</aside></section>
+  <div className="footer">ORVIX · PUBLIC VERIFIED PROXY AGGREGATOR · AUTHORIZED / RESPONSIBLE USE</div>
+ </main></>;
 }
