@@ -1,0 +1,14 @@
+"use client";
+import { useState } from "react";
+import "./globals.css";
+
+type Finding={severity:string;title:string;detail:string;evidence?:string};
+type Result={target:string;finalUrl:string;status:number;findings:Finding[];checks:string[];durationMs:number};
+export default function Home(){
+ const [url,setUrl]=useState(""); const [ok,setOk]=useState(false); const [loading,setLoading]=useState(false); const [error,setError]=useState(""); const [result,setResult]=useState<Result|null>(null);
+ async function scan(){setError("");setResult(null);if(!ok){setError("Confirm that you own the target or have permission to scan it.");return}setLoading(true);try{const r=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Scan failed");setResult(d)}catch(e){setError(e instanceof Error?e.message:"Scan failed")}finally{setLoading(false)}}
+ return <main className="shell"><section className="hero"><div className="badge">XSSONPY • WEB SECURITY</div><h1>Find security issues.<br/><span>Safely.</span></h1><p>Enter a website you are authorized to test. XSSonPy performs non-destructive checks and gives you evidence to investigate.</p><div className="scanner"><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://example.com" onKeyDown={e=>e.key==="Enter"&&scan()}/><button onClick={scan} disabled={loading||!url.trim()}>{loading?"Scanning…":"Start scan"}</button></div><label className="consent"><input type="checkbox" checked={ok} onChange={e=>setOk(e.target.checked)}/> I own this target or have explicit authorization to test it.</label>{error&&<div className="error">{error}</div>}</section>
+ {loading&&<section className="card progress"><div className="spinner"/><div><strong>Analyzing target…</strong><p>Checking headers, redirects, cookies, forms, scripts and common exposure signals.</p></div></section>}
+ {result&&<section className="results"><div className="summary card"><div><small>TARGET</small><strong>{result.target}</strong><span>{result.status} • {result.finalUrl}</span></div><div className="score">{result.findings.length}<small>findings</small></div></div><div className="grid"><div className="card"><h2>Findings</h2>{result.findings.length===0?<div className="clean">✓ No issues detected by the passive checks.</div>:result.findings.map((f,i)=><article className="finding" key={i}><div className={'severity '+f.severity.toLowerCase()}>{f.severity}</div><div><h3>{f.title}</h3><p>{f.detail}</p>{f.evidence&&<code>{f.evidence}</code>}</div></article>)}</div><div className="card"><h2>Checks performed</h2><ul>{result.checks.map((c,i)=><li key={i}>✓ {c}</li>)}</ul><p className="muted">Completed in {result.durationMs} ms.</p></div></div></section>}
+ <footer>Authorized testing only • XSSonPy v1.0</footer></main>;
+}
