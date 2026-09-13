@@ -1,0 +1,23 @@
+import { NextResponse } from "next/server";
+import dns from "node:dns/promises";
+
+function privateIPv4(ip:string){const p=ip.split(".").map(Number);return p.length===4&&(p[0]===10||p[0]===127||p[0]===0||(p[0]===169&&p[1]===254)||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168));}
+function privateIPv6(ip:string){const x=ip.toLowerCase();return x==="::1"||x.startsWith("fc")||x.startsWith("fd")||x.startsWith("fe80:");}
+async function safeHost(host:string){if(host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host.endsWith(".internal"))return false;const addrs=await dns.lookup(host,{all:true});return addrs.length>0&&addrs.every(a=>a.family===4?!privateIPv4(a.address):!privateIPv6(a.address));}
+export async function POST(req:Request){const started=Date.now();try{const body=await req.json();const raw=String(body?.url||"").trim();if(!/^https?:\/\//i.test(raw))return NextResponse.json({error:"Enter an http(s) URL."},{status:400});const u=new URL(raw);if(u.username||u.password)return NextResponse.json({error:"Credentials in URLs are not allowed."},{status:400});if(!(await safeHost(u.hostname)))return NextResponse.json({error:"Private, local, or reserved hosts are blocked."},{status:400});
+ const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),9000);let r:Response;try{r=await fetch(u,{redirect:"follow",signal:controller.signal,headers:{"user-agent":"XSSonPy/1.0 authorized-security-scanner"}})}finally{clearTimeout(timer)}
+ const final=new URL(r.url);if(final.hostname!==u.hostname&&!(await safeHost(final.hostname)))return NextResponse.json({error:"Redirected to a private or reserved host; scan stopped."},{status:400});
+ const h=r.headers;const findings:any[]=[];const checks:string[]=[];
+ checks.push("HTTP status and redirect chain");checks.push("Security response headers");checks.push("Cookie flags");checks.push("Content type and transport");checks.push("Common exposure signals");
+ if(final.protocol!=="https:")findings.push({severity:"Medium",title:"Target is not using HTTPS",detail:"The scanned URL resolved over HTTP. Authentication and sensitive traffic should normally use HTTPS.",evidence:final.href});
+ if(!h.get("content-security-policy"))findings.push({severity:"Low",title:"Content-Security-Policy missing",detail:"No CSP header was observed. A CSP can reduce the impact of some script injection bugs."});
+ if(!h.get("x-content-type-options"))findings.push({severity:"Low",title:"X-Content-Type-Options missing",detail:"The response does not set nosniff, leaving MIME-sniffing protections weaker."});
+ if(!h.get("referrer-policy"))findings.push({severity:"Info",title:"Referrer-Policy missing",detail:"No explicit referrer policy was observed."});
+ if(!h.get("permissions-policy"))findings.push({severity:"Info",title:"Permissions-Policy missing",detail:"No explicit browser feature policy was observed."});
+ const cookies=h.getSetCookie?.()||[];for(const c of cookies){const lc=c.toLowerCase();if(!lc.includes("secure")&&final.protocol==="https:")findings.push({severity:"Medium",title:"Cookie without Secure flag",detail:"A cookie was set over an HTTPS response without the Secure attribute.",evidence:c.split(";")[0]});if(!lc.includes("httponly"))findings.push({severity:"Low",title:"Cookie without HttpOnly",detail:"A cookie was set without HttpOnly; client-side scripts may be able to read it.",evidence:c.split(";")[0]});if(!lc.includes("samesite"))findings.push({severity:"Low",title:"Cookie without SameSite",detail:"A cookie was set without an explicit SameSite attribute.",evidence:c.split(";")[0]});}
+ const ct=h.get("content-type")||"";if(!ct.toLowerCase().includes("text/html"))findings.push({severity:"Info",title:"Response is not HTML",detail:`The target returned ${ct||"an unspecified content type"}. Browser-page checks were therefore limited.`});
+ const bodyText=(await r.text()).slice(0,500000);if(/(?:\.env|\.git\/|swagger|openapi|debug|stack trace)/i.test(bodyText))findings.push({severity:"Info",title:"Potentially interesting disclosure marker",detail:"The initial response contains a common development/debug marker. This is only a signal and requires manual verification."});
+ return NextResponse.json({target:u.origin,finalUrl:final.href,status:r.status,findings,checks,durationMs:Date.now()-started});
+ }catch(e){return NextResponse.json({error:e instanceof Error&&e.name==="AbortError"?"Target timed out.":"Unable to scan that target safely."},{status:502})}}
+export const runtime="nodejs";
+export const dynamic="force-dynamic";
